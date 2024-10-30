@@ -43,12 +43,12 @@ if __name__ == "__main__":
 
 Usage:
 
-python -m chmpredict.main --rgb_dir /path/to/rgb --chm_dir /path/to/chm --learning_rate 1e-4 --batch_size 16 --num_epochs 50 --patience 5 --model_path best_model.pth
+python -m chmpredict.main --data-folder /path/to/data --learning-rate 1e-4 --batch-size 16 --epochs 50 --patience 5 --output-dir output/chmpredict
 
-Example:
+Or
 
-python -m chmpredict.main --rgb_dir /Users/anisr/Documents/CHM_Images/Images --chm_dir /Users/anisr/Documents/CHM_Images/CHM --learning_rate 1e-4 --batch_size 16 --num_epochs 50 --patience 5 --model_path best_model.pth
+python -m chmpredict.main --config /path/to/config.ini
 
-python -m chmpredict.main --config ./configs/config.ini
+
 
 '''

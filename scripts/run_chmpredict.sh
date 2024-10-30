@@ -5,7 +5,7 @@
 #SBATCH --error=output/stderr/%A_%a.err            # Error log
 #SBATCH --ntasks=1                                 # Number of tasks (1 process)
 #SBATCH --cpus-per-task=4                          # Number of CPU cores per task
-#SBATCH --time=08:00:00                            # Time limit (hh:mm:ss)
+#SBATCH --time=12:00:00                            # Time limit (hh:mm:ss)
 #SBATCH --partition=gpu                            # Partition to submit to
 #SBATCH --gres=gpu:v100:1                          # Number and type of GPU
 #SBATCH --mem-per-cpu=8G                           # Memory per GPU in GB
@@ -45,7 +45,7 @@ echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 echo "       Job time limit: $SLURM_TIMELIMIT"
 
-srun python3 -m chmpredict.main "$CONFIG_PATH"
+srun python3 -m chmpredict.main --config "$CONFIG_PATH"
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
