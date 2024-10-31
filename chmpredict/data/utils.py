@@ -18,4 +18,4 @@ def create_file_pairs(rgb_dir, chm_dir):
 
     file_pairs = [(rgb_dict[id], chm_dict[id]) for id in rgb_dict.keys() if id in chm_dict]
 
-    return file_pairs[:5]
+    return file_pairs
