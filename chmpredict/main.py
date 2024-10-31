@@ -9,15 +9,29 @@ from chmpredict.model.eval import eval_fn
 
 
 def main(config):
+    print("Starting CHM Predictor Training Process...")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
+    print("Loading data...")
     train_loader, val_loader, test_loader = load_fn(config.data_folder, config.batch_size)
+    print(f"Data loaded successfully: {len(train_loader.dataset)} training samples, "
+          f"{len(val_loader.dataset)} validation samples, {len(test_loader.dataset)} test samples")
 
+    print("Building model and optimizer...")
     model, criterion, optimizer = build_fn(config.learning_rate, device)
+    print("Model and optimizer built successfully.")
 
+    print("Starting training...")
     train_fn(train_loader, val_loader, model, criterion, optimizer, config.epochs, config.patience, config.output_dir, device)
+    print("Training completed.")
 
-    eval_fn(test_loader, model, criterion, config.output_dir, device)
+    print("Evaluating on test data...")
+    test_loss = eval_fn(test_loader, model, criterion, config.output_dir, device)
+    print(f"Test evaluation completed. Final test loss: {test_loss:.4f}")
+
+    print("CHM Predictor Training Process Completed.")
 
 
 if __name__ == "__main__":
