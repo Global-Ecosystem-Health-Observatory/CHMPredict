@@ -7,6 +7,7 @@ setup(
     license="GPLv3+",
     packages=find_packages(include=["chmpredict"]),
     install_requires=[
+        'tqdm',
         'pillow',
         'rasterio',
         'torchvision',
