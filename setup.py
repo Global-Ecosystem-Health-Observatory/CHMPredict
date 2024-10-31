@@ -8,6 +8,7 @@ setup(
     packages=find_packages(include=["chmpredict"]),
     install_requires=[
         'tqdm',
+        'h5py',
         'pillow',
         'rasterio',
         'torchvision',

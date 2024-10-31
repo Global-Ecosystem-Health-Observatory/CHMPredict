@@ -7,6 +7,8 @@ from chmpredict.model.eval import eval_loop
 
 
 def train_fn(train_loader, val_loader, model, criterion, optimizer, num_epochs, patience, output_dir, device):
+    os.makedirs(output_dir, exist_ok=True)
+
     best_val_loss = float("inf")
     early_stopping_counter = 0
 
@@ -19,10 +21,12 @@ def train_fn(train_loader, val_loader, model, criterion, optimizer, num_epochs, 
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), os.path.join(output_dir, "best_model.pth"))
+            torch.save(model.state_dict(), os.path.join(output_dir, f"best_model_epoch_{epoch+1}.pth"))
             early_stopping_counter = 0
+            print(f"[INFO] Validation loss improved. Model saved at epoch {epoch + 1}.")
         else:
             early_stopping_counter += 1
+            print(f"[INFO] Validation loss did not improve. Early stopping counter: {early_stopping_counter}/{patience}")
 
         print(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
 
@@ -37,8 +41,7 @@ def train_loop(loader, model, criterion, optimizer, device):
 
     with tqdm(loader, unit="batch") as tepoch:
         for data, targets in tepoch:
-            data = data.to(device)
-            targets = targets.to(device)
+            data, targets = data.to(device), targets.to(device)
 
             # Forward pass
             predictions = model(data)
@@ -50,6 +53,7 @@ def train_loop(loader, model, criterion, optimizer, device):
             loss.backward()
             optimizer.step()
 
+            # Update progress bar with the current loss
             tepoch.set_postfix(loss=loss.item())
 
     avg_train_loss = train_loss / len(loader)

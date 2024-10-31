@@ -1,66 +1,58 @@
+import h5py
 import torch
-import rasterio
+
 import numpy as np
 
 from torch.utils.data import Dataset
-from rasterio.enums import Resampling
-from sklearn.model_selection import train_test_split
-
-from chmpredict.data.utils import create_file_pairs
+from PIL import Image
 
 
 class CHMDataset(Dataset):
-    def __init__(self, rgb_dir, chm_dir, patch_size=256, transform=None, mode="train", test_size=0.2, val_size=0.25, random_state=42):
-        self.rgb_dir = rgb_dir
-        self.chm_dir = chm_dir
-        self.patch_size = patch_size
+    def __init__(
+        self,
+        hdf5_file,
+        transform=None,
+        mode="train",
+        train_ratio=0.7,
+        val_ratio=0.15,
+        test_ratio=0.15,
+    ):
+        self.hdf5_file = hdf5_file
         self.transform = transform
         self.mode = mode
 
-        self.file_pairs = create_file_pairs(rgb_dir, chm_dir)
-        
-        train_val_pairs, test_pairs = train_test_split(self.file_pairs, test_size=test_size, random_state=random_state)
-        train_pairs, val_pairs = train_test_split(train_val_pairs, test_size=val_size, random_state=random_state)
+        with h5py.File(hdf5_file, "r") as f:
+            self.num_patches = f["rgb_patches"].shape[0]
+
+        train_end = int(train_ratio * self.num_patches)
+        val_end = train_end + int(val_ratio * self.num_patches)
 
         if mode == "train":
-            self.files = train_pairs
+            self.indices = range(0, train_end)
         elif mode == "val":
-            self.files = val_pairs
+            self.indices = range(train_end, val_end)
         elif mode == "test":
-            self.files = test_pairs
+            self.indices = range(val_end, self.num_patches)
         else:
-            raise ValueError("Mode must be 'train', 'val', or 'test'")        
+            raise ValueError("Mode must be 'train', 'val', or 'test'")
 
     def __len__(self):
-        return len(self.files) * 100  # Adjust based on sampling needs
+        return len(self.indices)
 
     def __getitem__(self, idx):
-        rgb_path, chm_path = self.files[idx % len(self.files)]
-        
-        with rasterio.open(rgb_path) as rgb_src, rasterio.open(chm_path) as chm_src:
-            rgb_resampled = rgb_src.read(
-                out_shape=(rgb_src.count, chm_src.height, chm_src.width),
-                resampling=Resampling.bilinear
-            ).astype(np.float32) / 255
+        hdf5_index = self.indices[idx]
 
-            chm = chm_src.read(1).astype(np.float32)
+        with h5py.File(self.hdf5_file, "r") as f:
+            rgb_patch = f["rgb_patches"][hdf5_index]  # Shape: (3, patch_size, patch_size)
+            chm_patch = f["chm_patches"][hdf5_index]  # Shape: (1, patch_size, patch_size)
 
-            x = np.random.randint(0, chm_src.width - self.patch_size + 1)
-            y = np.random.randint(0, chm_src.height - self.patch_size + 1)
-            
-            rgb_patch = rgb_resampled[:, y:y+self.patch_size, x:x+self.patch_size]
-            chm_patch = chm[y:y+self.patch_size, x:x+self.patch_size]
-        
-        if chm_patch.max() - chm_patch.min() > 0:
-            chm_patch = (chm_patch - chm_patch.min()) / (chm_patch.max() - chm_patch.min())
-        else:
-            chm_patch = np.zeros_like(chm_patch)
-
-        rgb_tensor = torch.from_numpy(rgb_patch)
-        chm_tensor = torch.from_numpy(chm_patch).unsqueeze(0)
+        rgb_patch = rgb_patch.transpose(1, 2, 0)  # Convert from CHW to HWC
+        rgb_patch = (rgb_patch * 255).astype(np.uint8)
+        rgb_patch = Image.fromarray(rgb_patch)
 
         if self.transform:
-            rgb_tensor = self.transform(rgb_tensor)
-            chm_tensor = self.transform(chm_tensor)
+            rgb_patch = self.transform(rgb_patch)  # Transform now works with PIL image
 
-        return rgb_tensor, chm_tensor
+        chm_tensor = torch.from_numpy(chm_patch).float()  # Shape: (1, patch_size, patch_size)
+
+        return rgb_patch, chm_tensor

@@ -3,6 +3,8 @@ import torch
 import configargparse
 
 from chmpredict.data.loader import load_fn
+from chmpredict.data.create import create_patch_pool
+
 from chmpredict.model.build import build_fn
 from chmpredict.model.train import train_fn
 from chmpredict.model.eval import eval_fn
@@ -11,11 +13,22 @@ from chmpredict.model.eval import eval_fn
 def main(config):
     print("Starting CHM Predictor Training Process...")
 
+    if not os.path.exists(config.output_dir):
+        os.makedirs(config.output_dir)
+
+    hdf5_path = os.path.join(config.data_folder, config.hdf5_file)
+
+    if not os.path.exists(hdf5_path):
+        print(f"Creating patch pool at {hdf5_path}...")
+        create_patch_pool(config.data_folder, config.hdf5_file, patch_size=256, stride=256)
+    else:
+        print(f"HDF5 file {hdf5_path} already exists. Skipping creation.")
+        
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     print("Loading data...")
-    train_loader, val_loader, test_loader = load_fn(config.data_folder, config.batch_size)
+    train_loader, val_loader, test_loader = load_fn(hdf5_path, config.batch_size)
     print(f"Data loaded successfully: {len(train_loader.dataset)} training samples, "
           f"{len(val_loader.dataset)} validation samples, {len(test_loader.dataset)} test samples")
 
@@ -39,6 +52,7 @@ if __name__ == "__main__":
 
     parser.add('--config', is_config_file=True, help='Path to config file')
     parser.add('--data-folder', type=str, required=True, help='Root data directory containing Images and CHM folders')
+    parser.add('--hdf5-file', type=str, default='Finland_CHM.h5', help='HDF5 file containing CHM dataset')
     parser.add('--output-dir', type=str, default='output/chmpredict', help='Directory to save output models and logs')
     parser.add('--learning-rate', type=float, default=1e-4, help='Learning rate for optimizer')
     parser.add('--batch-size', type=int, default=16, help='Batch size for DataLoader')
@@ -46,9 +60,6 @@ if __name__ == "__main__":
     parser.add('--patience', type=int, default=5, help='Patience for early stopping')
 
     config, _ = parser.parse_known_args()
-
-    if not os.path.exists(config.output_dir):
-        os.makedirs(config.output_dir)
 
     main(config)
 
