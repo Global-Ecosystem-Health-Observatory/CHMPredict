@@ -49,9 +49,9 @@ srun python3 -m chmpredict.main --config "$CONFIG_PATH"
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
-    echo "[ERROR] NIR Predictor failed with exit status $EXIT_STATUS"
+    echo "[ERROR] CHM Predictor failed with exit status $EXIT_STATUS"
 else
-    echo "[INFO] NIR Predictor completed successfully"
+    echo "[INFO] CHM Predictor completed successfully"
 fi
 
 exit $EXIT_STATUS
