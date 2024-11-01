@@ -6,6 +6,7 @@ from chmpredict.data.loader import load_fn
 from chmpredict.data.create import create_patch_pool
 
 from chmpredict.model.build import build_fn
+from chmpredict.model.callback import EarlyStopping, ModelCheckpoint
 from chmpredict.model.train import train_fn
 from chmpredict.model.eval import eval_fn
 
@@ -33,11 +34,25 @@ def main(config):
           f"{len(val_loader.dataset)} validation samples, {len(test_loader.dataset)} test samples")
 
     print("Building model and optimizer...")
-    model, criterion, optimizer = build_fn(config.learning_rate, device)
+    model, criterion, optimizer = build_fn(config.learning_rate, config.output_dir, device)
     print("Model and optimizer built successfully.")
 
+    early_stopping = EarlyStopping(patience=config.patience)
+    model_checkpoint = ModelCheckpoint(output_dir=config.output_dir)
+    
     print("Starting training...")
-    train_fn(train_loader, val_loader, model, criterion, optimizer, config.epochs, config.patience, config.output_dir, device)
+    train_fn(
+        train_loader, 
+        val_loader, 
+        model, 
+        criterion, 
+        optimizer, 
+        config.epochs, 
+        config.patience, 
+        config.output_dir, 
+        device, 
+        callbacks=[early_stopping, model_checkpoint]
+    )
     print("Training completed.")
 
     print("Evaluating on test data...")
