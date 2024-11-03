@@ -13,13 +13,16 @@ def eval_fn(loader, model, criterion, output_dir, device):
     for metric_name, value in metrics.items():
         print(f"{metric_name}: {value:.4f}")
 
-
 def eval_loop(loader, model, criterion, device):
     model.eval()
-    total_loss = 0
+    total_loss, total_mae, total_rmse, total_mape, total_smape = 0, 0, 0, 0, 0
+    epsilon = 1e-6
     n_samples = 0
-    metric_sums = {name: 0 for name in METRICS.keys()}  # Initialize sums for each metric
-
+    
+    y_true_sum, y_pred_sum = 0, 0
+    y_true_sq_sum, y_pred_sq_sum = 0, 0
+    y_pred_y_true_sum = 0
+    
     with torch.no_grad():
         for data, targets in tqdm(loader, desc="Evaluating", unit="batch"):
             data, targets = data.to(device), targets.to(device)
@@ -29,49 +32,36 @@ def eval_loop(loader, model, criterion, device):
             total_loss += criterion(predictions, targets).item() * batch_size
             n_samples += batch_size
 
-            for name, func in METRICS.items():
-                metric_sums[name] += func(targets.cpu().numpy(), predictions.cpu().numpy())
+            targets_np = targets.cpu().numpy().flatten()
+            predictions_np = predictions.cpu().numpy().flatten()
+            
+            total_mae += np.sum(np.abs(predictions_np - targets_np))
+            total_rmse += np.sum((predictions_np - targets_np) ** 2)
+            non_zero_mask = targets_np != 0  # Mask to avoid division by zero in MAPE
+            total_mape += np.sum(np.abs((predictions_np[non_zero_mask] - targets_np[non_zero_mask]) 
+                                        / (targets_np[non_zero_mask] + epsilon))) * 100
+            total_smape += np.sum(2 * np.abs(predictions_np - targets_np) 
+                                  / (np.abs(targets_np) + np.abs(predictions_np) + epsilon)) * 100
 
-    avg_loss = total_loss / n_samples
-    avg_metrics = {name: value / n_samples for name, value in metric_sums.items()}
-    avg_metrics["mse"] = avg_loss
+            y_true_sum += np.sum(targets_np)
+            y_pred_sum += np.sum(predictions_np)
+            y_true_sq_sum += np.sum(targets_np ** 2)
+            y_pred_sq_sum += np.sum(predictions_np ** 2)
+            y_pred_y_true_sum += np.sum(predictions_np * targets_np)
     
-    return avg_metrics
+    avg_loss = total_loss / n_samples
+    mae = total_mae / n_samples
+    rmse = np.sqrt(total_rmse / n_samples)
+    mape = total_mape / n_samples
+    smape = total_smape / n_samples
 
+    ss_res = total_rmse  # Sum of squared residuals
+    ss_tot = np.sum((targets_np - np.mean(targets_np)) ** 2)  # Total sum of squares
+    r2 = 1 - (ss_res / (ss_tot + epsilon))
 
-def mean_absolute_error(y_true, y_pred):
-    return np.sum(np.abs(y_pred - y_true))
-
-
-def root_mean_squared_error(y_true, y_pred):
-    return np.sum((y_pred - y_true) ** 2) ** 0.5
-
-
-def mean_absolute_percentage_error(y_true, y_pred, epsilon=1e-6):
-    non_zero = y_true != 0
-    return np.sum(np.abs((y_true[non_zero] - y_pred[non_zero]) / (y_true[non_zero] + epsilon))) * 100
-
-
-def symmetric_mean_absolute_percentage_error(y_true, y_pred, epsilon=1e-6):
-    return np.sum(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred) + epsilon)) * 100
-
-
-def r2_score(y_true, y_pred):
-    ss_res = np.sum((y_true - y_pred) ** 2)
-    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
-    return 1 - (ss_res / (ss_tot + 1e-6))
-
-def correlation_coefficient(y_true, y_pred):
-    mean_true, mean_pred = np.mean(y_true), np.mean(y_pred)
-    cov = np.sum((y_true - mean_true) * (y_pred - mean_pred))
-    std_true, std_pred = np.std(y_true), np.std(y_pred)
-    return cov / (std_true * std_pred + 1e-6)
-
-METRICS = {
-    "mae": mean_absolute_error,
-    "rmse": root_mean_squared_error,
-    "mape": mean_absolute_percentage_error,
-    "smape": symmetric_mean_absolute_percentage_error,
-    "r2": r2_score,
-    "corr_coeff": correlation_coefficient,
-}
+    numerator = n_samples * y_pred_y_true_sum - y_pred_sum * y_true_sum
+    denominator = np.sqrt((n_samples * y_pred_sq_sum - y_pred_sum ** 2) * 
+                          (n_samples * y_true_sq_sum - y_true_sum ** 2))
+    corr_coeff = numerator / (denominator + epsilon)
+    
+    return {"mse": avg_loss, "mae": mae, "rmse": rmse, "mape": mape, "smape": smape, "r2": r2, "corr_coeff": corr_coeff}
