@@ -8,7 +8,7 @@ from threading import Lock
 from rasterio.enums import Resampling
 from concurrent.futures import ThreadPoolExecutor
 
-from chmpredict.data.utils import create_file_pairs
+from chmpredict.data.utils import create_file_pairs, calculate_chm_mean_std
 
 h5_lock = Lock()
 
@@ -23,6 +23,10 @@ def create_patch_pool(
         raise FileNotFoundError(f"RGB or CHM directory not found in: {data_folder}")
     if not os.listdir(rgb_dir) or not os.listdir(chm_dir):
         raise ValueError("RGB or CHM directory is empty. Please provide valid data.")
+
+    mean, std = calculate_chm_mean_std(chm_dir, num_threads=8, nan_value=-9999)
+    print(f"Calculated CHM Mean: {mean:.4f}")
+    print(f"Calculated CHM Std: {std:.4f}")
 
     num_patches = estimate_total_patches(rgb_dir, chm_dir, patch_size, stride)
 
@@ -46,6 +50,8 @@ def create_patch_pool(
                         patch_idx,
                         patch_size,
                         stride,
+                        mean,
+                        std
                     )
                 )
 
@@ -54,7 +60,7 @@ def create_patch_pool(
 
 
 def process_image(
-    rgb_path, chm_path, rgb_dataset, chm_dataset, patch_idx, patch_size, stride
+    rgb_path, chm_path, rgb_dataset, chm_dataset, patch_idx, patch_size, stride, mean, std
 ):
     with rasterio.open(rgb_path) as rgb_src, rasterio.open(chm_path) as chm_src:
         rgb_resampled = (
@@ -71,7 +77,7 @@ def process_image(
                 rgb_patch = rgb_resampled[:, y : y + patch_size, x : x + patch_size]
                 chm_patch = chm[y : y + patch_size, x : x + patch_size]
 
-                chm_patch = (chm_patch - chm_patch.min()) / (chm_patch.max() - chm_patch.min() + 1e-6)
+                chm_patch = (chm_patch - mean) / std
 
                 chm_patch = np.expand_dims(chm_patch, axis=0)
 
