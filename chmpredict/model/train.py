@@ -1,40 +1,45 @@
 from tqdm import tqdm
 
 from chmpredict.model.eval import eval_loop
+from chmpredict.model.callback import EarlyStopping
 
 
 def train_fn(train_loader, val_loader, model, criterion, optimizer, num_epochs, patience, output_dir, device, callbacks=None):
-    if callbacks is None:
-        callbacks = []
-
-    for callback in callbacks:
-        callback.on_train_begin()
-
-    best_val_loss = float("inf")
-    early_stopping_counter = 0
+    logs = {"model": model}
 
     for epoch in range(num_epochs):
         print(f"\nEpoch [{epoch + 1}/{num_epochs}]")
+        
+        model.train()
+        train_loss = 0
+        for data, targets in train_loader:
+            data, targets = data.to(device), targets.to(device)
 
-        for callback in callbacks:
-            callback.on_epoch_begin(epoch)
+            optimizer.zero_grad()
+            predictions = model(data)
+            loss = criterion(predictions, targets)
+            loss.backward()
+            optimizer.step()
 
-        train_loss = train_loop(train_loader, model, criterion, optimizer, device)
+            train_loss += loss.item()
+        
+        avg_train_loss = train_loss / len(train_loader)
+        
+        val_metrics = eval_loop(val_loader, model, criterion, device)
+        val_loss = val_metrics["mse"]  # Set main validation metric as `mse` for callbacks
+        
+        logs["val_loss"] = val_loss  # Primary metric
+        logs.update(val_metrics)
+        logs["epoch"] = epoch
 
-        val_loss = eval_loop(val_loader, model, criterion, device)
-        logs = {"val_loss": val_loss, "train_loss": train_loss, "model": model}
+        if callbacks:
+            for callback in callbacks:
+                callback.on_epoch_end(epoch, logs=logs)
+                if isinstance(callback, EarlyStopping) and callback.stop_training:
+                    print("Training stopped early due to EarlyStopping.")
+                    return
 
-        for callback in callbacks:
-            callback.on_epoch_end(epoch, logs=logs)
-
-        print(f"Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
-
-        if any(getattr(callback, "stop_training", False) for callback in callbacks):
-            print("Training stopped by a callback.")
-            break
-
-    for callback in callbacks:
-        callback.on_train_end()
+        print(f"Train Loss: {avg_train_loss:.4f}, Val Loss (MSE): {val_loss:.4f}")
 
 
 def train_loop(loader, model, criterion, optimizer, device):
@@ -55,7 +60,6 @@ def train_loop(loader, model, criterion, optimizer, device):
             loss.backward()
             optimizer.step()
 
-            # Update progress bar with the current loss
             tepoch.set_postfix(loss=loss.item())
 
     avg_train_loss = train_loss / len(loader)
