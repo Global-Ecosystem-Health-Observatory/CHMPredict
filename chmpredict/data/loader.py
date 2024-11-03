@@ -18,7 +18,7 @@ def load_fn(hdf5_file_path, batch_size):
     test_dataset = CHMDataset(hdf5_file_path, transform=data_transforms, mode="test")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size * 2, shuffle=False, num_workers=8, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size * 2, shuffle=False, num_workers=8, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
 
     return train_loader, val_loader, test_loader
