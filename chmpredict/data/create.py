@@ -24,9 +24,9 @@ def create_patch_pool(
     if not os.listdir(rgb_dir) or not os.listdir(chm_dir):
         raise ValueError("RGB or CHM directory is empty. Please provide valid data.")
 
-    mean, std = calculate_chm_mean_std(chm_dir, num_threads=8, nan_value=-9999)
-    print(f"Calculated CHM Mean: {mean:.4f}")
-    print(f"Calculated CHM Std: {std:.4f}")
+    mean_chm, std_chm = calculate_chm_mean_std(chm_dir, num_threads=8, nan_value=-9999)
+    print(f"Calculated CHM Mean: {mean_chm:.4f}")
+    print(f"Calculated CHM Std: {std_chm:.4f}")
 
     num_patches = estimate_total_patches(rgb_dir, chm_dir, patch_size, stride)
 
@@ -50,8 +50,8 @@ def create_patch_pool(
                         patch_idx,
                         patch_size,
                         stride,
-                        mean,
-                        std
+                        mean_chm,
+                        std_chm
                     )
                 )
 
@@ -60,7 +60,7 @@ def create_patch_pool(
 
 
 def process_image(
-    rgb_path, chm_path, rgb_dataset, chm_dataset, patch_idx, patch_size, stride, mean, std
+    rgb_path, chm_path, rgb_dataset, chm_dataset, patch_idx, patch_size, stride, mean_chm, std_chm
 ):
     with rasterio.open(rgb_path) as rgb_src, rasterio.open(chm_path) as chm_src:
         rgb_resampled = (
@@ -77,7 +77,9 @@ def process_image(
                 rgb_patch = rgb_resampled[:, y : y + patch_size, x : x + patch_size]
                 chm_patch = chm[y : y + patch_size, x : x + patch_size]
 
-                chm_patch = (chm_patch - mean) / std
+                chm_patch[chm_patch == -9999] = 0  # Replace -9999 with 0 or another appropriate value
+
+                chm_patch = (chm_patch - mean_chm) / std_chm
 
                 chm_patch = np.expand_dims(chm_patch, axis=0)
 
