@@ -29,7 +29,6 @@ def create_file_pairs(rgb_dir, chm_dir):
 
 
 def process_chm_file(chm_path, nan_value=-9999):
-    """Process a single CHM file to calculate sum, sum of squares, and count, excluding NaN values."""
     with rasterio.open(chm_path) as chm_src:
         chm_data = chm_src.read(1).astype(np.float32)
         
