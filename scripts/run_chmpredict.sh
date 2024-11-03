@@ -4,7 +4,7 @@
 #SBATCH --output=output/stdout/%A_%a.out           # Output log
 #SBATCH --error=output/stderr/%A_%a.err            # Error log
 #SBATCH --ntasks=1                                 # Number of tasks (1 process)
-#SBATCH --cpus-per-task=4                          # Number of CPU cores per task
+#SBATCH --cpus-per-task=8                          # Number of CPU cores per task
 #SBATCH --time=12:00:00                            # Time limit (hh:mm:ss)
 #SBATCH --partition=gpu                            # Partition to submit to
 #SBATCH --gres=gpu:v100:1                          # Number and type of GPU
@@ -12,7 +12,10 @@
 
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
-# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config" run_chmpredict.sh
+# export EVAL_ONLY=1  # Set this variable if you want to run in evaluation mode only
+# sbatch --export=ALL,CONFIG_PATH="/path/to/config.ini" run_chmpredict.sh
+# Or
+# sbatch --export=ALL,CONFIG_PATH="/path/to/config.ini",EVAL_ONLY=1 run_chmpredict.sh
 
 MODULE_NAME="pytorch/2.3"
 
@@ -45,7 +48,14 @@ echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 echo "       Job time limit: $SLURM_TIMELIMIT"
 
-srun python3 -m chmpredict.main --config "$CONFIG_PATH"
+# Check if EVAL_ONLY is set; if so, add the --eval-only flag
+EVAL_FLAG=""
+if [ "$EVAL_ONLY" = "1" ]; then
+    EVAL_FLAG="--eval-only"
+    echo "[INFO] Running in evaluation-only mode."
+fi
+
+srun python3 -m chmpredict.main --config "$CONFIG_PATH" $EVAL_FLAG
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then

@@ -4,7 +4,6 @@ import configargparse
 
 from chmpredict.data.loader import load_fn
 from chmpredict.data.create import create_patch_pool
-
 from chmpredict.model.build import build_fn
 from chmpredict.model.callback import EarlyStopping, ModelCheckpoint
 from chmpredict.model.train import train_fn
@@ -12,7 +11,7 @@ from chmpredict.model.eval import eval_fn
 
 
 def main(config):
-    print("Starting CHM Predictor Training Process...")
+    print("Starting CHM Predictor Process...")
 
     if not os.path.exists(config.output_dir):
         os.makedirs(config.output_dir)
@@ -29,37 +28,38 @@ def main(config):
     print(f"Using device: {device}")
 
     print("Loading data...")
-    train_loader, val_loader, test_loader = load_fn(hdf5_path, config.batch_size)
-    print(f"Data loaded successfully: {len(train_loader.dataset)} training samples, "
-          f"{len(val_loader.dataset)} validation samples, {len(test_loader.dataset)} test samples")
+    _, _, test_loader = load_fn(hdf5_path, config.batch_size)
+    print(f"Data loaded successfully: {len(test_loader.dataset)} test samples")
 
     print("Building model and optimizer...")
     model, criterion, optimizer = build_fn(config.learning_rate, config.output_dir, device)
     print("Model and optimizer built successfully.")
 
-    early_stopping = EarlyStopping(patience=config.patience)
-    model_checkpoint = ModelCheckpoint(output_dir=config.output_dir)
-    
-    print("Starting training...")
-    train_fn(
-        train_loader, 
-        val_loader, 
-        model, 
-        criterion, 
-        optimizer, 
-        config.epochs, 
-        config.patience, 
-        config.output_dir, 
-        device, 
-        callbacks=[early_stopping, model_checkpoint]
-    )
-    print("Training completed.")
+    if not config.eval_only:
+        print("Starting training...")
+        train_loader, val_loader, _ = load_fn(hdf5_path, config.batch_size)
+        early_stopping = EarlyStopping(patience=config.patience)
+        model_checkpoint = ModelCheckpoint(output_dir=config.output_dir)
+        
+        train_fn(
+            train_loader, 
+            val_loader, 
+            model, 
+            criterion, 
+            optimizer, 
+            config.epochs, 
+            config.patience, 
+            config.output_dir, 
+            device, 
+            callbacks=[early_stopping, model_checkpoint]
+        )
+        print("Training completed.")
 
     print("Evaluating on test data...")
-    test_loss = eval_fn(test_loader, model, criterion, config.output_dir, device)
-    print(f"Test evaluation completed. Final test loss: {test_loss:.4f}")
+    eval_fn(test_loader, model, criterion, config.output_dir, device)
+    print("Test evaluation completed.")
 
-    print("CHM Predictor Training Process Completed.")
+    print("CHM Predictor Process Completed.")
 
 
 if __name__ == "__main__":
@@ -73,6 +73,7 @@ if __name__ == "__main__":
     parser.add('--batch-size', type=int, default=16, help='Batch size for DataLoader')
     parser.add('--epochs', type=int, default=50, help='Number of training epochs')
     parser.add('--patience', type=int, default=5, help='Patience for early stopping')
+    parser.add('--eval-only', action='store_true', help='Skip training and only perform evaluation')
 
     config, _ = parser.parse_known_args()
 
@@ -83,12 +84,16 @@ if __name__ == "__main__":
 
 Usage:
 
+- Training
+
 python -m chmpredict.main --data-folder /path/to/data --learning-rate 1e-4 --batch-size 16 --epochs 50 --patience 5 --output-dir output/chmpredict
 
 Or
 
-python -m chmpredict.main --config /path/to/config.ini
+python -m chmpredict.main --config ./configs/config.ini
 
+- Evaluation
 
+python -m chmpredict.main --config ./configs/config.ini --eval-only
 
 '''
