@@ -2,8 +2,6 @@ import torch
 import numpy as np
 
 from tqdm import tqdm
-from scipy.stats import pearsonr
-from sklearn.metrics import mean_absolute_error, r2_score
 
 from chmpredict.model.build import load_best_model
 
@@ -11,51 +9,69 @@ from chmpredict.model.build import load_best_model
 def eval_fn(loader, model, criterion, output_dir, device):
     load_best_model(model, output_dir, device)
     
-    test_loss, mae, rmse, mape, smape, r2, corr_coeff = eval_loop(loader, model, criterion, device)
-    print(f"Test Loss (MSE): {test_loss:.4f}")
-    print(f"Mean Absolute Error (MAE): {mae:.4f}")
-    print(f"Root Mean Squared Error (RMSE): {rmse:.4f}")
-    print(f"Mean Absolute Percentage Error (MAPE): {mape:.4f}%")
-    print(f"Symmetric Mean Absolute Percentage Error (SMAPE): {smape:.4f}%")
-    print(f"R-squared (R²): {r2:.4f}")
-    print(f"Correlation Coefficient (r): {corr_coeff:.4f}")
+    metrics = eval_loop(loader, model, criterion, device)
+    for metric_name, value in metrics.items():
+        print(f"{metric_name}: {value:.4f}")
 
 
 def eval_loop(loader, model, criterion, device):
     model.eval()
     total_loss = 0
-    all_targets = []
-    all_predictions = []
-    
+    n_samples = 0
+    metric_sums = {name: 0 for name in METRICS.keys()}  # Initialize sums for each metric
+
     with torch.no_grad():
-        with tqdm(loader, unit="batch", desc="Evaluating") as tepoch:
-            for data, targets in tepoch:
-                data, targets = data.to(device), targets.to(device)
+        for data, targets in tqdm(loader, desc="Evaluating", unit="batch"):
+            data, targets = data.to(device), targets.to(device)
+            predictions = model(data)
+            batch_size = targets.size(0)
 
-                predictions = model(data)
-                loss = criterion(predictions, targets)
-                total_loss += loss.item()
+            total_loss += criterion(predictions, targets).item() * batch_size
+            n_samples += batch_size
 
-                all_targets.extend(targets.cpu().numpy().flatten())
-                all_predictions.extend(predictions.cpu().numpy().flatten())
+            for name, func in METRICS.items():
+                metric_sums[name] += func(targets.cpu().numpy(), predictions.cpu().numpy())
 
-                tepoch.set_postfix(loss=loss.item())
-
-    avg_loss = total_loss / len(loader)
-    mae = mean_absolute_error(all_targets, all_predictions)
-    rmse = np.sqrt(np.mean((np.array(all_targets) - np.array(all_predictions)) ** 2))
-
-    epsilon = 1e-6
-    targets_array = np.array(all_targets)
-    predictions_array = np.array(all_predictions)
+    avg_loss = total_loss / n_samples
+    avg_metrics = {name: value / n_samples for name, value in metric_sums.items()}
+    avg_metrics["mse"] = avg_loss
     
-    non_zero_targets = targets_array != 0
-    mape = np.mean(np.abs((targets_array[non_zero_targets] - predictions_array[non_zero_targets]) 
-                          / (targets_array[non_zero_targets] + epsilon))) * 100
+    return avg_metrics
 
-    smape = np.mean(2 * np.abs(predictions_array - targets_array) 
-                    / (np.abs(targets_array) + np.abs(predictions_array) + epsilon)) * 100
-    r2 = r2_score(all_targets, all_predictions)
-    corr_coeff, _ = pearsonr(all_targets, all_predictions)
-    
-    return avg_loss, mae, rmse, mape, smape, r2, corr_coeff
+
+def mean_absolute_error(y_true, y_pred):
+    return np.sum(np.abs(y_pred - y_true))
+
+
+def root_mean_squared_error(y_true, y_pred):
+    return np.sum((y_pred - y_true) ** 2) ** 0.5
+
+
+def mean_absolute_percentage_error(y_true, y_pred, epsilon=1e-6):
+    non_zero = y_true != 0
+    return np.sum(np.abs((y_true[non_zero] - y_pred[non_zero]) / (y_true[non_zero] + epsilon))) * 100
+
+
+def symmetric_mean_absolute_percentage_error(y_true, y_pred, epsilon=1e-6):
+    return np.sum(2 * np.abs(y_pred - y_true) / (np.abs(y_true) + np.abs(y_pred) + epsilon)) * 100
+
+
+def r2_score(y_true, y_pred):
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    ss_tot = np.sum((y_true - np.mean(y_true)) ** 2)
+    return 1 - (ss_res / (ss_tot + 1e-6))
+
+def correlation_coefficient(y_true, y_pred):
+    mean_true, mean_pred = np.mean(y_true), np.mean(y_pred)
+    cov = np.sum((y_true - mean_true) * (y_pred - mean_pred))
+    std_true, std_pred = np.std(y_true), np.std(y_pred)
+    return cov / (std_true * std_pred + 1e-6)
+
+METRICS = {
+    "mae": mean_absolute_error,
+    "rmse": root_mean_squared_error,
+    "mape": mean_absolute_percentage_error,
+    "smape": symmetric_mean_absolute_percentage_error,
+    "r2": r2_score,
+    "corr_coeff": correlation_coefficient,
+}
