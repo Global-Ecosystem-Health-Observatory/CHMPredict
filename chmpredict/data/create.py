@@ -8,29 +8,17 @@ from threading import Lock
 from rasterio.enums import Resampling
 from concurrent.futures import ThreadPoolExecutor
 
-from chmpredict.data.utils import create_file_pairs, calculate_chm_mean_std
+from chmpredict.data.utils import create_file_pairs
 
 h5_lock = Lock()
 
 
 def create_patch_pool(
-    data_folder, output_file, patch_size=256, stride=256, num_threads=8
+    rgb_dir, chm_dir, hdf5_path, mean_chm, std_chm, patch_size=256, stride=256, num_threads=8
 ):
-    rgb_dir = os.path.join(data_folder, "Images")
-    chm_dir = os.path.join(data_folder, "CHM")
-
-    if not os.path.isdir(rgb_dir) or not os.path.isdir(chm_dir):
-        raise FileNotFoundError(f"RGB or CHM directory not found in: {data_folder}")
-    if not os.listdir(rgb_dir) or not os.listdir(chm_dir):
-        raise ValueError("RGB or CHM directory is empty. Please provide valid data.")
-
-    mean_chm, std_chm = calculate_chm_mean_std(chm_dir, num_threads=8, nan_value=-9999)
-    print(f"Calculated CHM Mean: {mean_chm:.4f}")
-    print(f"Calculated CHM Std: {std_chm:.4f}")
-
     num_patches = estimate_total_patches(rgb_dir, chm_dir, patch_size, stride)
 
-    with h5py.File(os.path.join(data_folder, output_file), "w") as f:
+    with h5py.File(hdf5_path, "w") as f:
         rgb_dataset = f.create_dataset("rgb_patches", (num_patches, 3, patch_size, patch_size), dtype="float32")
         chm_dataset = f.create_dataset("chm_patches", (num_patches, 1, patch_size, patch_size), dtype="float32")
 

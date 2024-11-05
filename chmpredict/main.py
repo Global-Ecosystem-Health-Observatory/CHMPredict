@@ -4,6 +4,8 @@ import configargparse
 
 from chmpredict.data.loader import load_fn
 from chmpredict.data.create import create_patch_pool
+from chmpredict.data.utils import calculate_chm_mean_std
+
 from chmpredict.model.build import build_fn
 from chmpredict.model.callback import EarlyStopping, ModelCheckpoint
 from chmpredict.model.train import train_fn
@@ -13,14 +15,26 @@ from chmpredict.model.eval import eval_fn
 def main(config):
     print("Starting CHM Predictor Process...")
 
+    rgb_dir = os.path.join(config.data_folder, "Images")
+    chm_dir = os.path.join(config.data_folder, "CHM")
+
+    if not os.path.isdir(rgb_dir) or not os.path.isdir(chm_dir):
+        raise FileNotFoundError(f"RGB or CHM directory not found in: {config.data_folder}")
+    if not os.listdir(rgb_dir) or not os.listdir(chm_dir):
+        raise ValueError("RGB or CHM directory is empty. Please provide valid data.")
+
     if not os.path.exists(config.output_dir):
         os.makedirs(config.output_dir)
 
     hdf5_path = os.path.join(config.data_folder, config.hdf5_file)
 
+    mean_chm, std_chm = calculate_chm_mean_std(chm_dir, num_threads=8, nan_value=-9999)
+    print(f"Calculated CHM Mean: {mean_chm:.4f}")
+    print(f"Calculated CHM Std: {std_chm:.4f}")
+
     if not os.path.exists(hdf5_path):
         print(f"Creating patch pool at {hdf5_path}...")
-        create_patch_pool(config.data_folder, config.hdf5_file, patch_size=256, stride=256)
+        create_patch_pool(rgb_dir, chm_dir, hdf5_path, mean_chm, std_chm, patch_size=256, stride=256)
     else:
         print(f"HDF5 file {hdf5_path} already exists. Skipping creation.")
         
@@ -56,7 +70,7 @@ def main(config):
         print("Training completed.")
 
     print("Evaluating on test data...")
-    eval_fn(test_loader, model, criterion, config.output_dir, device)
+    eval_fn(test_loader, model, criterion, config.output_dir, mean_chm, std_chm, device)
     print("Test evaluation completed.")
 
     print("CHM Predictor Process Completed.")
