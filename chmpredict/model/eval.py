@@ -30,11 +30,9 @@ def eval_loop(loader, model, criterion, mean_chm, std_chm, device, nan_value=-99
             data, targets = data.to(device), targets.to(device)
             predictions = model(data)
             
-            # Reverse normalization on predictions and targets
             predictions = predictions * std_chm + mean_chm
             targets = targets * std_chm + mean_chm
             
-            # Mask out `nan_value` from targets and corresponding predictions
             mask = targets != nan_value
             targets = targets[mask]
             predictions = predictions[mask]
@@ -46,11 +44,9 @@ def eval_loop(loader, model, criterion, mean_chm, std_chm, device, nan_value=-99
             targets_np = targets.cpu().numpy().flatten()
             predictions_np = predictions.cpu().numpy().flatten()
 
-            # Calculate metrics while masking out the `nan_value` locations
             total_mae += np.sum(np.abs(predictions_np - targets_np))
             total_rmse += np.sum((predictions_np - targets_np) ** 2)
 
-            # Calculate MAPE and SMAPE with threshold to filter near-zero targets
             min_height_threshold = 1.0  # Threshold for filtering near-zero target values
             valid_mape_smape = targets_np > min_height_threshold
             total_mape += np.sum(np.abs((predictions_np[valid_mape_smape] - targets_np[valid_mape_smape]) 
@@ -58,28 +54,29 @@ def eval_loop(loader, model, criterion, mean_chm, std_chm, device, nan_value=-99
             total_smape += np.sum(2 * np.abs(predictions_np[valid_mape_smape] - targets_np[valid_mape_smape]) 
                                   / (np.abs(targets_np[valid_mape_smape]) + np.abs(predictions_np[valid_mape_smape]) + epsilon)) * 100
 
-            # Accumulate values for R² and correlation coefficient calculations
             y_true_sum += np.sum(targets_np)
             y_pred_sum += np.sum(predictions_np)
             y_true_sq_sum += np.sum(targets_np ** 2)
             y_pred_sq_sum += np.sum(predictions_np ** 2)
             y_pred_y_true_sum += np.sum(predictions_np * targets_np)
     
-    # Final aggregated metrics
     avg_loss = total_loss / n_samples
     mae = total_mae / n_samples
+
     rmse = np.sqrt(total_rmse / n_samples)
+
     mape = total_mape / n_samples
     smape = total_smape / n_samples
 
-    ss_res = total_rmse
+    ss_res = np.sum((predictions_np - targets_np) ** 2)
+
     ss_tot = np.sum((targets_np - np.mean(targets_np)) ** 2)
+
     r2 = 1 - (ss_res / (ss_tot + epsilon))
 
-    # Correlation Coefficient Calculation
     numerator = n_samples * y_pred_y_true_sum - y_pred_sum * y_true_sum
     denominator = np.sqrt((n_samples * y_pred_sq_sum - y_pred_sum ** 2) * 
-                          (n_samples * y_true_sq_sum - y_true_sum ** 2))
+                        (n_samples * y_true_sq_sum - y_true_sum ** 2))
     corr_coeff = numerator / (denominator + epsilon)
-    
+
     return {"mse": avg_loss, "mae": mae, "rmse": rmse, "mape": mape, "smape": smape, "r2": r2, "corr_coeff": corr_coeff}
