@@ -64,6 +64,8 @@ def main(config):
             config.epochs, 
             config.patience, 
             config.output_dir, 
+            mean_chm, 
+            std_chm,
             device, 
             callbacks=[early_stopping, model_checkpoint]
         )

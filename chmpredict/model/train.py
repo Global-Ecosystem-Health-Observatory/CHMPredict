@@ -4,7 +4,7 @@ from chmpredict.model.eval import eval_loop
 from chmpredict.model.callback import EarlyStopping
 
 
-def train_fn(train_loader, val_loader, model, criterion, optimizer, num_epochs, patience, output_dir, device, callbacks=None):
+def train_fn(train_loader, val_loader, model, criterion, optimizer, num_epochs, patience, output_dir, mean_chm, std_chm, device, callbacks=None):
     logs = {"model": model}
 
     for epoch in range(num_epochs):
@@ -25,7 +25,7 @@ def train_fn(train_loader, val_loader, model, criterion, optimizer, num_epochs, 
         
         avg_train_loss = train_loss / len(train_loader)
         
-        val_metrics = eval_loop(val_loader, model, criterion, device)
+        val_metrics = eval_loop(val_loader, model, criterion, mean_chm, std_chm, device)
         val_loss = val_metrics["mse"]  # Set main validation metric as `mse` for callbacks
         
         logs["val_loss"] = val_loss  # Primary metric
