@@ -30,16 +30,17 @@ def eval_loop(loader, model, criterion, mean_chm, std_chm, device, nan_value=-99
             data, targets = data.to(device), targets.to(device)
             predictions = model(data)
             
+            batch_size = targets.size(0)
+            total_loss += criterion(predictions, targets).item() * batch_size
+            
+            n_samples += batch_size
+
             predictions = predictions * std_chm + mean_chm
             targets = targets * std_chm + mean_chm
             
             mask = targets != nan_value
             targets = targets[mask]
             predictions = predictions[mask]
-            
-            batch_size = targets.size(0)
-            total_loss += criterion(predictions, targets).item() * batch_size
-            n_samples += batch_size
 
             targets_np = targets.cpu().numpy().flatten()
             predictions_np = predictions.cpu().numpy().flatten()
